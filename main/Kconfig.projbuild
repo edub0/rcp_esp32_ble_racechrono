@@ -1,0 +1,28 @@
+menu "TireX Bridge Options"
+
+config TIREX_DECODER_CONSOLE_LOGGING
+    bool "Enable TireX decoder console logging"
+    default y
+    help
+        Prints decoded TireX temperatures to the serial console when CAN
+        frames are received. Disable this to reduce log noise during normal
+        BLE bridge operation.
+
+config TIREX_FORWARD_ALL_PIDS_OVER_BLE
+    bool "Forward all CAN PIDs over BLE"
+    default n
+    help
+        Forwards every extended CAN frame over BLE, regardless of RaceChrono
+        filter commands. When disabled, the bridge still forwards TireX CAN
+        frames, but other PIDs remain controlled by the RaceChrono filter
+        characteristic.
+
+config TIREX_DISABLE_ALL_CONSOLE_LOGGING
+    bool "Disable all console logging"
+    default n
+    help
+        Suppresses all ESP-IDF console logging from this firmware after startup.
+        Enable this for a completely quiet build when you do not want any
+        serial log output from the bridge.
+
+endmenu

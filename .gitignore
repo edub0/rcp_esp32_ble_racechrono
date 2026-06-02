@@ -1,0 +1,12 @@
+# ESP-IDF build output
+build/
+sdkconfig.old
+
+# Editor and OS noise
+.DS_Store
+*.swp
+*.swo
+
+# Documentation and notes
+*.md
+
