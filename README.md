@@ -1,10 +1,10 @@
 ## How It Works
 
-This project is an ESP32-S3 firmware bridge that listens to TireX CAN traffic on the vehicle CAN bus and forwards selected frames to RaceChrono over Bluetooth LE using RaceChrono’s DIY CAN-over-BLE protocol.
+This project is an ESP32-S3 firmware bridge from Autosport Labs (https://wiki.autosportlabs.com/ESP32-CAN-X2) that listens to ASL's TireX CAN bus and forwards selected frames to RaceChrono over Bluetooth LE using RaceChrono’s DIY CAN-over-BLE protocol (https://racechrono.com/article/2572).
 
 At a high level:
 
-1. The ESP32 receives extended CAN frames on CAN1/TWAI.
+1. The ESP32 receives extended CAN frames on CAN1.
 2. TireX frames can be decoded locally for debug logging.
 3. A filter decides which CAN IDs should be forwarded over BLE.
 4. Matching frames are sent to RaceChrono as BLE notifications.
