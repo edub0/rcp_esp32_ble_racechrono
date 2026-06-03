@@ -24,7 +24,7 @@ Watch the serial log for connection status and forwarded frames.
    - Leave it disabled for normal filtered behavior. In that mode, TireX CAN IDs are still forwarded by default, and additional PIDs can be enabled through RaceChrono’s filter characteristic. Good if you have limited ble bandwidth.
    - Use `TIREX_DISABLE_ALL_CONSOLE_LOGGING` if you want a quiet serial monitor.
    - Use `TIREX_DECODER_CONSOLE_LOGGING` if you want TireX temperature values printed to the console while CAN frames are received.
-2. Flash the firmware to the ESP32-S3. 'idf.py builf flash monitor'
+2. Flash the firmware to the ESP32-S3. 'idf.py build flash monitor'
 2. Power the board and confirm from your Bluetooth pairing mode that the board is visible as `RC_TireX`. The process is similar to paring a headset or speakers to your phone.
 3. Open RaceChrono and add a DIY device to the vehicle profile. You should see your RC_Tirex device under 'Bluetooth LE' connections.
 4. Configure your canbus PID' in the racechrono vehicle settings.
