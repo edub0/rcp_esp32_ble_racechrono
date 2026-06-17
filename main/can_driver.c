@@ -84,6 +84,16 @@ esp_err_t can_driver_receive(twai_message_t *msg, TickType_t ticks_to_wait)
     return twai_receive(msg, ticks_to_wait);
 }
 
+esp_err_t can_driver_transmit(const twai_message_t *msg, TickType_t ticks_to_wait)
+{
+    if (!s_can_running) {
+        ESP_LOGW(TAG, "CAN driver not running");
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    return twai_transmit(msg, ticks_to_wait);
+}
+
 bool can_driver_is_running(void)
 {
     return s_can_running;

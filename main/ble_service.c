@@ -5,6 +5,7 @@
  * - Service: 0x1FF8
  * - Characteristic 0x0001: CAN Notify (Notify)
  * - Characteristic 0x0002: CAN Filter (Write)
+ * - Characteristic 0x0003: Telemetry Notify (Notify) — unified telemetry snapshot
  * 
  * ESP-IDF v6.0.1 NimBLE GATT Server API
  */
@@ -12,6 +13,7 @@
 #include "ble_service.h"
 #include "filter.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nimble/nimble_port.h"
 #include "nimble/nimble_port_freertos.h"
 #include "nimble/ble.h"
@@ -31,6 +33,7 @@ static const char *TAG = "ble_service";
 #define RC_SVC_UUID16          0x1FF8
 #define RC_CAN_NOTIFY_UUID16   0x0001
 #define RC_CAN_FILTER_UUID16   0x0002
+#define RC_TELEMETRY_UUID16    0x0003  /* New: unified telemetry notifications */
 
 /* BLE Advertising interval (30ms) */
 #define ADV_ITVL_MIN           (30 * 16 / 1.25)
@@ -39,9 +42,13 @@ static const char *TAG = "ble_service";
 /* Connection state */
 static uint16_t s_conn_handle = 0xFFFF;
 static bool s_connected = false;
+static uint16_t s_mtu = BLE_ATT_MTU_DFLT;
+static uint32_t s_last_can_forward_log_ms = 0;
+static uint32_t s_last_telemetry_forward_log_ms = 0;
 
 /* Characteristic value handles (filled during GATT registration) */
 static uint16_t s_chr_can_notify_val_handle = 0;
+static uint16_t s_chr_telemetry_val_handle = 0;  /* New: telemetry notification handle */
 
 /* Device name for advertising */
 #define DEVICE_NAME            "RC_TireX"
@@ -51,18 +58,14 @@ static uint8_t s_own_addr_type = BLE_OWN_ADDR_PUBLIC;
 
 static int gap_event_handler(struct ble_gap_event *event, void *arg);
 static void ble_gatts_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
+static int rc_notify_read_cb(uint16_t conn_handle, uint16_t attr_handle,
+                             struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 /*
  * GATT Attribute Callbacks (ESP-IDF v6.0.1 NimBLE API)
  */
 
-static int
-rc_can_notify_read_cb(uint16_t conn_handle, uint16_t attr_handle,
-                      struct ble_gatt_access_ctxt *ctxt, void *arg)
-{
-    /* Read not used for notify characteristic */
-    return BLE_ATT_ERR_READ_NOT_PERMITTED;
-}
+/* No read callback needed — notify-only characteristic */
 
 static int
 rc_can_filter_write_cb(uint16_t conn_handle, uint16_t attr_handle,
@@ -98,9 +101,24 @@ rc_can_filter_write_cb(uint16_t conn_handle, uint16_t attr_handle,
     return 0;
 }
 
+static int
+rc_notify_read_cb(uint16_t conn_handle, uint16_t attr_handle,
+                  struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    (void)conn_handle;
+    (void)attr_handle;
+    (void)ctxt;
+    (void)arg;
+
+    return BLE_ATT_ERR_READ_NOT_PERMITTED;
+}
+
 /*
  * GATT Attribute Definitions (struct ble_gatt_svc_def format)
- * Fixed: One service with two characteristics
+ * One service with three characteristics:
+ *   0x0001: CAN Notify (Notify only)
+ *   0x0002: CAN Filter (Write only)
+ *   0x0003: Telemetry Notify (Notify only)
  */
 
 static const struct ble_gatt_svc_def s_rc_gatt_svcs[] = {
@@ -109,15 +127,20 @@ static const struct ble_gatt_svc_def s_rc_gatt_svcs[] = {
         .type = BLE_GATT_SVC_TYPE_PRIMARY,
         .uuid = BLE_UUID16_DECLARE(RC_SVC_UUID16),
         .characteristics = (struct ble_gatt_chr_def[]) { {
-            /* CAN Notify Characteristic */
+            /* CAN Notify Characteristic — Notify only */
             .uuid = BLE_UUID16_DECLARE(RC_CAN_NOTIFY_UUID16),
-            .access_cb = rc_can_notify_read_cb,
-            .flags = BLE_GATT_CHR_PROP_NOTIFY | BLE_GATT_CHR_F_READ,
+            .access_cb = rc_notify_read_cb,
+            .flags = BLE_GATT_CHR_F_NOTIFY,
         }, {
-            /* CAN Filter Characteristic */
+            /* CAN Filter Characteristic — Write only */
             .uuid = BLE_UUID16_DECLARE(RC_CAN_FILTER_UUID16),
             .access_cb = rc_can_filter_write_cb,
-            .flags = BLE_GATT_CHR_PROP_WRITE | BLE_GATT_CHR_F_WRITE,
+            .flags = BLE_GATT_CHR_F_WRITE,
+        }, {
+            /* Telemetry Notify Characteristic — Notify only */
+            .uuid = BLE_UUID16_DECLARE(RC_TELEMETRY_UUID16),
+            .access_cb = rc_notify_read_cb,
+            .flags = BLE_GATT_CHR_F_NOTIFY,
         }, {
             0, /* No more characteristics in this service */
         } },
@@ -202,6 +225,7 @@ static void
 ble_on_reset(int reason)
 {
     ESP_LOGW(TAG, "NimBLE stack reset: reason=%d", reason);
+    /* After a reset, the stack will call sync_cb again, which restarts advertising */
 }
 
 static void
@@ -234,11 +258,81 @@ ble_gatts_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
         ESP_LOGI(TAG, "Notify characteristic registered: val_handle=0x%04x",
                  s_chr_can_notify_val_handle);
     }
+
+    if (ble_uuid_cmp(ctxt->chr.chr_def->uuid, BLE_UUID16_DECLARE(RC_TELEMETRY_UUID16)) == 0) {
+        s_chr_telemetry_val_handle = ctxt->chr.val_handle;
+        ESP_LOGI(TAG, "Telemetry characteristic registered: val_handle=0x%04x",
+                 s_chr_telemetry_val_handle);
+    }
 }
 
 /*
  * GAP Event Handler
+ *
+ * Handles connection, disconnection, MTU exchange, and connection
+ * parameter updates.  On connect we request a larger MTU (247 bytes)
+ * and a shorter connection interval (15–20 ms) for low-latency
+ * telemetry.  On disconnect we immediately restart advertising.
  */
+
+/**
+ * Request optimal connection parameters after a successful connection.
+ *
+ * Target: interval 7.5–10 ms, latency 0, timeout 12.5 s.
+ */
+static void
+request_conn_params(uint16_t conn_handle)
+{
+    struct ble_gap_upd_params params;
+
+    memset(&params, 0, sizeof(params));
+
+    params.itvl_min          = 6;    /* 7.5 ms  (6 × 1.25) */
+    params.itvl_max          = 8;    /* 10 ms   (8 × 1.25) */
+    params.latency           = 0;
+    params.supervision_timeout = 100; /* 12.5 s */
+    params.min_ce_len       = 0;
+    params.max_ce_len       = 0;
+
+    int rc = ble_gap_update_params(conn_handle, &params);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "Failed to request connection param update: %d", rc);
+    } else {
+        ESP_LOGD(TAG, "Requested connection parameter update");
+    }
+}
+
+/**
+ * MTU exchange callback — stores the negotiated MTU.
+ */
+static int
+mtu_exchange_cb(uint16_t conn_handle, const struct ble_gatt_error *error,
+                uint16_t mtu, void *arg)
+{
+    if (error == NULL || error->status == 0) {
+        s_mtu = mtu;
+        ESP_LOGI(TAG, "MTU exchange: MTU=%d", s_mtu);
+    } else {
+        ESP_LOGW(TAG, "MTU exchange failed: status=%d",
+                 error ? error->status : BLE_ATT_ERR_INVALID_HANDLE);
+    }
+    return 0;
+}
+
+/**
+ * Request a larger ATT MTU (247 bytes) so telemetry notifications
+ * fit in a single packet.
+ */
+static void
+request_mtu(uint16_t conn_handle)
+{
+    int rc = ble_gattc_exchange_mtu(conn_handle, mtu_exchange_cb, NULL);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "Failed to request MTU exchange: %d", rc);
+    } else {
+        ESP_LOGD(TAG, "Requested MTU exchange (247 bytes)");
+    }
+}
 
 static int
 gap_event_handler(struct ble_gap_event *event, void *arg)
@@ -250,10 +344,16 @@ gap_event_handler(struct ble_gap_event *event, void *arg)
             s_connected = true;
             ESP_LOGD(TAG, "BLE connected: handle=%d", s_conn_handle);
             ESP_LOGI(TAG, "Connected to RaceChrono (handle=%d)", s_conn_handle);
+
+            /* Request larger MTU and faster connection interval */
+            request_mtu(s_conn_handle);
+            request_conn_params(s_conn_handle);
         } else {
             ESP_LOGE(TAG, "Connection failed: %d", event->connect.status);
-            ble_gap_terminate(event->connect.conn_handle,
-                             BLE_ERR_REM_USER_CONN_TERM);
+            /* Restart advertising so the central can retry */
+            if (!start_advertising()) {
+                ESP_LOGE(TAG, "Failed to restart advertising after connection failure");
+            }
         }
         break;
         
@@ -266,6 +366,41 @@ gap_event_handler(struct ble_gap_event *event, void *arg)
         }
         break;
         
+    case BLE_GAP_EVENT_SUBSCRIBE:
+    {
+        const char *reason = "unknown";
+        if (event->subscribe.reason == BLE_GAP_SUBSCRIBE_REASON_WRITE) {
+            reason = "write";
+        } else if (event->subscribe.reason == BLE_GAP_SUBSCRIBE_REASON_TERM) {
+            reason = "term";
+        } else if (event->subscribe.reason == BLE_GAP_SUBSCRIBE_REASON_RESTORE) {
+            reason = "restore";
+        }
+
+        ESP_LOGI(TAG,
+                 "Subscribe notification: conn=%d attr_handle=%d reason=%s notify=%d indicate=%d",
+                 event->subscribe.conn_handle,
+                 event->subscribe.attr_handle,
+                 reason,
+                 event->subscribe.cur_notify,
+                 event->subscribe.cur_indicate);
+    }
+        break;
+
+    case BLE_GAP_EVENT_MTU:
+        s_mtu = event->mtu.value;
+        ESP_LOGI(TAG, "MTU exchange: MTU=%d", s_mtu);
+        break;
+
+    case BLE_GAP_EVENT_CONN_UPDATE:
+        if (event->conn_update.status == 0) {
+            ESP_LOGI(TAG, "Connection parameters updated");
+        } else {
+            ESP_LOGW(TAG, "Connection parameter update failed: %d",
+                     event->conn_update.status);
+        }
+        break;
+
     default:
         break;
     }
@@ -302,15 +437,55 @@ notify_can_frame(uint16_t conn_handle, uint32_t can_id,
         return BLE_ERR_MEM_CAPACITY;
     }
 
-    int rc = ble_gattc_notify_custom(conn_handle,
+    int rc = ble_gatts_notify_custom(conn_handle,
                                      s_chr_can_notify_val_handle, om);
     if (rc != 0) {
         ESP_LOGW(TAG, "Failed to send notification: %d", rc);
     } else {
-        ESP_LOGD(TAG, "BLE notify delivered: conn=%u can_id=0x%08" PRIX32,
-                 conn_handle, can_id);
-        ESP_LOGI(TAG, "Sent BLE notify: conn=%u can_id=0x%08" PRIX32 " len=%u",
-                 conn_handle, can_id, len);
+        ESP_LOGD(TAG, "BLE notify delivered: conn=%u can_id=0x%08" PRIX32 " len=%u",
+                 conn_handle, can_id, 4 + len);
+        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        if (now_ms - s_last_can_forward_log_ms >= 1000) {
+            ESP_LOGI(TAG, "BLE CAN forwarded: can_id=0x%08" PRIX32 " len=%u",
+                     can_id, len);
+            s_last_can_forward_log_ms = now_ms;
+        }
+    }
+
+    return rc;
+}
+
+/*
+ * Telemetry Notification Helper
+ */
+
+static int
+notify_telemetry(uint16_t conn_handle, const uint8_t *data, uint8_t len)
+{
+    if (conn_handle == 0xFFFF ||
+        s_chr_telemetry_val_handle == 0) {
+        return BLE_ERR_UNSUPPORTED;
+    }
+
+    struct os_mbuf *om = ble_hs_mbuf_from_flat(data, len);
+    if (om == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate mbuf for telemetry notification");
+        return BLE_ERR_MEM_CAPACITY;
+    }
+
+    int rc = ble_gatts_notify_custom(conn_handle,
+                                     s_chr_telemetry_val_handle, om);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "Failed to send telemetry notification: %d", rc);
+    } else {
+        ESP_LOGD(TAG, "Telemetry notify delivered: conn=%u len=%u",
+                 conn_handle, len);
+        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        if (now_ms - s_last_telemetry_forward_log_ms >= 2000) {
+            ESP_LOGI(TAG, "BLE telemetry forwarded: len=%u mtu=%u",
+                     len, s_mtu);
+            s_last_telemetry_forward_log_ms = now_ms;
+        }
     }
 
     return rc;
@@ -366,6 +541,29 @@ bool ble_send_can_frame(uint32_t can_id, const uint8_t *data, uint8_t len)
     }
 
     int rc = notify_can_frame(s_conn_handle, can_id, data, len);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "BLE CAN notify failed: rc=%d", rc);
+    }
+    return (rc == 0);
+}
+
+bool ble_send_telemetry_snapshot(const uint8_t *data, uint8_t len)
+{
+    if (!s_connected || s_conn_handle == 0xFFFF) {
+        return false;
+    }
+
+    /* Ensure payload fits within negotiated MTU (minus 3-byte ATT header) */
+    uint16_t max_payload = s_mtu - 3;
+    if (len > max_payload) {
+        ESP_LOGW(TAG, "Telemetry payload %u exceeds MTU %u, truncating", len, max_payload);
+        len = (uint8_t)max_payload;
+    }
+
+    int rc = notify_telemetry(s_conn_handle, data, len);
+    if (rc != 0) {
+        ESP_LOGW(TAG, "BLE telemetry notify failed: rc=%d", rc);
+    }
     return (rc == 0);
 }
 
@@ -377,4 +575,9 @@ bool ble_is_connected(void)
 uint16_t ble_get_conn_handle(void)
 {
     return s_conn_handle;
+}
+
+uint16_t ble_get_mtu(void)
+{
+    return s_mtu;
 }
