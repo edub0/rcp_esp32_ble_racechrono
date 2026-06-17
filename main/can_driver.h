@@ -41,6 +41,15 @@ esp_err_t can_driver_stop(void);
 esp_err_t can_driver_receive(twai_message_t *msg, TickType_t ticks_to_wait);
 
 /**
+ * Transmit a CAN frame with timeout
+ *
+ * @param msg Pointer to TWAI message structure to send
+ * @param ticks_to_wait FreeRTOS ticks to wait
+ * @return ESP_OK on success, ESP_ERR on failure
+ */
+esp_err_t can_driver_transmit(const twai_message_t *msg, TickType_t ticks_to_wait);
+
+/**
  * Check if CAN driver is initialized and running
  * 
  * @return true if running, false otherwise

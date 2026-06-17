@@ -9,4 +9,5 @@ sdkconfig.old
 
 # Documentation and notes
 *.md
-
+!milestones/
+!milestones/*.md

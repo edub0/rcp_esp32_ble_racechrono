@@ -13,8 +13,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Maximum number of filter rules */
-#define MAX_FILTER_RULES  16
+/* Maximum number of filter rules.
+ *
+ * RaceChrono can subscribe to more than 16 distinct PIDs during a live
+ * session, so keep some headroom above the observed client request set.
+ */
+#define MAX_FILTER_RULES  32
 
 /**
  * Filter rule structure

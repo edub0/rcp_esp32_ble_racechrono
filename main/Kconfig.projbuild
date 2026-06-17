@@ -25,4 +25,60 @@ config TIREX_DISABLE_ALL_CONSOLE_LOGGING
         Enable this for a completely quiet build when you do not want any
         serial log output from the bridge.
 
+config TIREX_SUPPRESS_BLE_IDLE_SEND_WARNINGS
+    bool "Suppress BLE idle send warnings"
+    default y
+    help
+        Suppresses the warning that would otherwise appear when the bridge
+        has CAN or telemetry data to send but no RaceChrono BLE client is
+        currently connected. Keep this enabled for normal use so the monitor
+        stays quiet unless there is a real BLE error.
+
+endmenu
+
+menu "EXLAP Gateway Options"
+
+config EXLAP_TESTING_AP_UI
+    bool "Enable troubleshooting SoftAP and web UI"
+    default y
+    help
+        Enables the EXLAP-Gateway SoftAP, the local web diagnostics UI,
+        and the manual WiFi join/stop controls used for troubleshooting.
+        Disable this for a quieter STA-only build that connects directly
+        to the vehicle WiFi using saved credentials.
+
+config EXLAP_ENABLED
+    bool "Enable EXLAP telemetry gateway"
+    default y
+    help
+        Enables the EXLAP TCP client for connecting to VAG vehicle
+        telemetry services over WiFi. When enabled, the firmware will
+        initialize WiFi and attempt to connect to the configured
+        vehicle EXLAP service.
+
+config EXLAP_PARSER_DEBUG_LOGGING
+    bool "Enable EXLAP parser debug logging"
+    default n
+    depends on EXLAP_ENABLED
+    help
+        Enables verbose debug logging inside the EXLAP parser for
+        troubleshooting tag extraction and buffer state. Disable in
+        production to reduce log overhead.
+
+config EXLAP_PARSER_CONSOLE_LOGGING
+    bool "Enable EXLAP parser console logging"
+    default y
+    depends on EXLAP_ENABLED
+    help
+        Prints parsed EXLAP telemetry data to the serial console.
+        Disable this to reduce log noise during normal operation.
+
+config EXLAP_AUTO_CONNECT
+    bool "Auto-connect to EXLAP on startup"
+    default y
+    depends on EXLAP_ENABLED
+    help
+        Automatically attempts to connect to the vehicle EXLAP service
+        on startup using saved NVS credentials.
+
 endmenu
