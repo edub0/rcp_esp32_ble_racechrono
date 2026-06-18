@@ -1,20 +1,39 @@
-## How It Works
+## What is this project?
 
-This project is an ESP32-S3 firmware bridge from Autosport Labs (https://wiki.autosportlabs.com/ESP32-CAN-X2) that listens to ASL's TireX CAN1 bus and forwards selected frames over Bluetooth LE to RaceChrono's DIY CAN-over-BLE protocol (https://racechrono.com/article/2572).
+I always wanted a way to capture vehicle data from a Porsche without being locked into the Porsche Track Precision app.
 
-Rough feature set:
+Through the Porsche wifi hotspot and a 12v vehicle outlet, this projects lets me capture signals like:
 
-1. The ESP32 receives CAN frames on CAN1.
-2. CAN frames are treated with a filter. Either all CAN frames are forwarded, or just the default Tirex PID's are forwarded.
-3. Frames passing the filter are sent to RaceChrono via Bluetooth LE notification.
+lat/long Acceleration
+Understeer/Oversteer
+Brake Pressure
+Wheel Angle
+Yaw Rate
+Vehicle Speed
+Tyre Velocities
+Accelerator Position
+
+I can also hook this device up to a CANBUS and capture CAN data.
+
+**Current Features:**
+Wireless capture of Porsche EXLAP data (same data source from Porsche Precision Track app)
+EXLAP & CANBUS -> Bluetooth LE -> Racechrono Pro (via DIY Bluetooth feature)
+Autosportlabs Tirex sensor configuration through webUI
+
+**Planned Work(w)/Features(f):**
+(f)Improved Tirex sensor installation walkthrough
+(w)Better documentation
+(w)Stress testing to determine CANBUS->BLE throughput limits and alerting when it breaks
+(w)Measure latency between between sensors creating data and when its recorded in the data logger. ie. How accurate is this data? 
+
+## How it works
+I use an ESP32-S3 to process CANBUS data and intrepert EXLAP from the cars wifi hotspot. The hardware is provided by Autosport Labs (https://wiki.autosportlabs.com/ESP32-CAN-X2). Once processed, we send selected data over Bluetooth LE to RaceChrono's DIY CAN-over-BLE protocol (https://racechrono.com/article/2572). This puts all our telemetry onto RaceChrono and from there we can analys or export it into various formats like CircuitTools, CSV
 
 Build Flags:
-The firmware has some features you can enable or disable:
-- Enable live stream of Tirex frame data via the ESP32 console.
-- **Forward all CAN PIDs** for raw passthrough and diagnostics. Or you just got a lot of CANBUS to send!
-- **RaceChrono filter mode** for forwarding only selected PIDs, while still allowing TireX frames through by default.
+A lot of the build flags are going to change as I build up new features. They a
 
 If needed, configure RaceChrono CAN filters to request specific PIDs.
+
 Watch the serial log for connection status and forwarded frames.
 
 ## How to Use
