@@ -2,18 +2,20 @@
 
 I always wanted a way to capture vehicle data from a Porsche without being locked into the Porsche Track Precision app.
 
-Through the Porsche wifi hotspot and a 12v vehicle outlet, this projects lets me capture signals like:
+Through the wifi hotspot and a 12v vehicle outlet, this projects lets me capture signals like:
 
-lat/long Acceleration
-Understeer/Oversteer
-Brake Pressure
-Wheel Angle
-Yaw Rate
-Vehicle Speed
-Tyre Velocities
-Accelerator Position
+| Porsche Data|
+| ----------- |
+| lat/long Acceleration      | 
+| Understeer/Oversteer   |
+|Brake Pressure|
+|Wheel Angle|
+|Yaw Rate|
+|Vehicle Speed|
+|Tyre Velocities|
+|Accelerator Position|
 
-I can also hook this device up to a CANBUS and capture CAN data.
+This project also can read CANBUS off the wire and transport it wirelessly over Bluetooth.
 
 **Current Features:**
 Wireless capture of Porsche EXLAP data (same data source from Porsche Precision Track app)
