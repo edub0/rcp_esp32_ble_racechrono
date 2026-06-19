@@ -20,27 +20,23 @@ Through the wifi hotspot and a 12v vehicle outlet, this projects lets me capture
 This project also can read CANBUS off the wire and transport it wirelessly over Bluetooth.
 
 **Current Features:**
-Wireless capture of Porsche EXLAP data (same data source from Porsche Precision Track app)
-EXLAP & CANBUS -> Bluetooth LE -> Racechrono Pro (via DIY Bluetooth feature)
-Autosportlabs Tirex sensor configuration through webUI
+- Wireless capture of Porsche EXLAP data (same data source from Porsche Precision Track app)
+- EXLAP & CANBUS -> Bluetooth LE -> Racechrono Pro (via DIY Bluetooth feature)
+- Autosportlabs Tirex sensor configuration through webUI
 
 **Planned Work(w)/Features(f):**
-(f)Improved Tirex sensor installation walkthrough
-(w)Better documentation
-(w)Stress testing to determine CANBUS->BLE throughput limits and alerting when it breaks
-(w)Measure latency between between sensors creating data and when its recorded in the data logger. ie. How accurate is this data? 
+- (f)Improved Tirex sensor installation walkthrough
+- (w)Better documentation
+- (w)Stress testing to determine CANBUS->BLE throughput limits and alerting when it breaks
+- (w)Measure latency between between sensors creating data and when its recorded in the data logger. ie. How accurate is this data? 
 
 ## How it works
 I use an ESP32-S3 to process CANBUS data and intrepert EXLAP from the cars wifi hotspot. The hardware is provided by Autosport Labs (https://wiki.autosportlabs.com/ESP32-CAN-X2). Once processed, we send selected data over Bluetooth LE to RaceChrono's DIY CAN-over-BLE protocol (https://racechrono.com/article/2572). This puts all our telemetry onto RaceChrono and from there we can analys or export it into various formats like CircuitTools, CSV
 
 Build Flags:
-A lot of the build flags are going to change as I build up new features. They a
+A lot of the build flags are going to change as I build up new features. Documentation coming...
 
-If needed, configure RaceChrono CAN filters to request specific PIDs.
-
-Watch the serial log for connection status and forwarded frames.
-
-## How to Use
+## How to Use (if you want to tweak things)
 
 1. Choose the build flags with `idf.py menuconfig` command before building. Menuconfig is part of the esp-idf build tools (https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-guides/build-system.html#idf-py):
    - Enable `TIREX_FORWARD_ALL_PIDS_OVER_BLE` to forward every CAN frame over Bluetooth. Maybe you have more devices than TireX you want to send
@@ -55,9 +51,9 @@ Watch the serial log for connection status and forwarded frames.
 
 ## If You Just Want to Try This on Your ESP32 and are about that tldr/yolo life
 
-If you've already installed esptool from prior projects, you can build this board by downloading the latest .bin from the Release section of this page.
+If you've already installed esptool from past projects, you can build this board by downloading the latest .bin from the Release section of this page.
 
-Put the board into boot mode - Power it on, hold down the 'Boot' button and then press 'Reset'. 
+Put the board into boot mode - Power it on, hold down the 'Boot' button and then press 'Reset' once. 
 ```
 esptool --chip esp32s3 -b 460800 \
   --before default-reset \
@@ -72,5 +68,5 @@ Open a web browser, go to 192.168.4.1
 You can see the status of the tirex connection, and enter your car's hotspot name and password, and exlap credentials.
 
 ## How NOT to use.
-1. don't try to power your tirex sensors from the ESP32 board. I released the magic smoke on one of my boards doing this
+1. don't try to power your tirex sensors from the ESP32 board. I released the magic smoke on one of my boards doing this. Instead wire your tirex sensor CanL/CanH into the CAN1 and power/ground the tirex sensor from another source.
 2. don't feed your board 12v from anything other than the 20/19 pins (or as documented).
