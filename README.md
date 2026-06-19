@@ -55,18 +55,22 @@ Watch the serial log for connection status and forwarded frames.
 
 ## If You Just Want to Try This on Your ESP32 and are about that tldr/yolo life
 
-If you already have the compiled binary files (check this repo's releases section), you can flash them directly without setting up the full ESP-IDF build environment.
+If you've already installed esptool from prior projects, you can build this board by downloading the latest .bin from the Release section of this page.
 
-Use `esptool.py` to write the bootloader, partition table, and app image to the board:
-
-```bash
-python3 -m esptool --chip esp32s3 -b 460800 \
-  --before default-reset --after hard-reset \
-  write-flash --flash-mode dio --flash-size 4MB --flash-freq 80m \
-  0x0 build/bootloader/bootloader.bin \
-  0x8000 build/partition_table/partition-table.bin \
-  0x10000 build/tirex_racechrono_ble.bin
+Put the board into boot mode - Power it on, hold down the 'Boot' button and then press 'Reset'. 
 ```
+esptool --chip esp32s3 -b 460800 \
+  --before default-reset \
+  --after hard-reset \
+  write-flash 0x0 merged-flash.bin
+  ```
+After flashing you may have to press the reset button to get the system up and working.
+
+Wifi is 'Exlap-Gateway' // exlapgw1
+Open a web browser, go to 192.168.4.1
+
+You can see the status of the tirex connection, and enter your car's hotspot name and password, and exlap credentials.
+
 ## How NOT to use.
 1. don't try to power your tirex sensors from the ESP32 board. I released the magic smoke on one of my boards doing this
 2. don't feed your board 12v from anything other than the 20/19 pins (or as documented).
