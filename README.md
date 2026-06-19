@@ -14,6 +14,8 @@ Through the wifi hotspot and a 12v vehicle outlet, this projects lets me capture
 |Vehicle Speed|
 |Tyre Velocities|
 |Accelerator Position|
+| Engine Speed|
+| Current Gear|
 
 This project also can read CANBUS off the wire and transport it wirelessly over Bluetooth.
 
